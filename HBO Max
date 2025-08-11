@@ -1,26 +1,68 @@
-/**
+/***
  * streaming-ui-check.js
  * 增加 HBO Max 影片可用性检测的完整版本示例
- * 适用于 Quantumult X event-interaction 脚本环境
- */
+ * 适用于 Quantumult-X 598+ 版本
+ * @XIAO_KOP
+ ***/
 
-// === 1. 基础 URL 定义 ===
-const BASE_URL_NETFLIX = 'https://www.netflix.com/title/';
-const BASE_URL_YOUTUBE_PREMIUM = 'https://www.youtube.com/premium';
+const BASE_URL = 'https://www.netflix.com/title/';
+const BASE_URL_YTB = "https://www.youtube.com/premium";
 const BASE_URL_DISNEY = 'https://www.disneyplus.com';
-const BASE_URL_DAZN = 'https://startup.core.indazn.com/misl/v5/Startup';
-const BASE_URL_PARAMOUNT = 'https://www.paramountplus.com/';
-const BASE_URL_DISCOVERY = 'https://www.discoveryplus.com';
-const BASE_URL_CHATGPT = 'https://chat.openai.com/';
+const BASE_URL_Dazn = "https://startup.core.indazn.com/misl/v5/Startup";
+const BASE_URL_Param = "https://www.paramountplus.com/";
+const BASE_URL_Discovery_token = "https://us1-prod-direct.discoveryplus.com/token?deviceId=d1a4a5d25212400d1e6985984604d740&realm=go&shortlived=true";
+const BASE_URL_Discovery = "https://us1-prod-direct.discoveryplus.com/users/me";
+const BASE_URL_GPT = 'https://chat.openai.com/';
+const Region_URL_GPT = 'https://chat.openai.com/cdn-cgi/trace';
 const BASE_URL_HBOMAX = 'https://play.hbomax.com/';
 
-// === 2. 状态定义 ===
-const STATUS_AVAILABLE = '支持';
-const STATUS_NOT_AVAILABLE = '不支持';
-const STATUS_TIMEOUT = '超时';
-const STATUS_ERROR = '异常';
+const FILM_ID = 81280792;
+const policy_name = "Netflix"; // 填入你的 Netflix 策略组名
+const arrow = " ➟ ";
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.61 Safari/537.36';
 
-// === 3. 通用请求函数（支持超时和fetch） ===
+const STATUS_COMING = 2;
+const STATUS_AVAILABLE = 1;
+const STATUS_NOT_AVAILABLE = 0;
+const STATUS_TIMEOUT = -1;
+const STATUS_ERROR = -2;
+
+const flags = new Map([
+  ["US", "美国"],
+  ["CA", "加拿大"],
+  ["GB", "英国"],
+  ["AU", "澳大利亚"],
+  ["JP", "日本"],
+  ["KR", "韩国"],
+  ["IN", "印度"],
+  ["SG", "新加坡"],
+  ["MY", "马来西亚"],
+  ["PH", "菲律宾"],
+  ["TH", "泰国"],
+  ["VN", "越南"],
+  ["ID", "印度尼西亚"],
+  ["TW", "台湾"],
+  ["HK", "香港"],
+  ["MO", "澳门"]
+]);
+
+let result = {
+  "title": ' 流媒体服务查询',
+  "YouTube": 'YouTube: 检测失败，请重试 ❗️',
+  "Netflix": 'Netflix: 检测失败，请重试 ❗️',
+  "Dazn": "Dazn: 检测失败，请重试 ❗️",
+  "Disney": "Disneyᐩ: 检测失败，请重试 ❗️",
+  "Paramount": "Paramountᐩ: 检测失败，请重试 ❗️",
+  "Discovery": "Discoveryᐩ: 检测失败，请重试 ❗️",
+  "ChatGPT": "ChatGPT: 检测失败，请重试 ❗️",
+  "HBO Max": "HBO Max: 检测失败，请重试 ❗️"
+};
+
+const message = {
+  action: "get_policy_state",
+  content: $environment.params
+};
+
 async function fetchWithTimeout(url, timeout = 10000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
@@ -34,107 +76,6 @@ async function fetchWithTimeout(url, timeout = 10000) {
   }
 }
 
-// === 4. 各服务检测函数 ===
-
-// Netflix 示例检测函数
-async function checkNetflix() {
-  try {
-    // 这里用一个示例ID检测（可以换成热门剧ID）
-    const testUrl = BASE_URL_NETFLIX + '80018499';
-    const res = await fetchWithTimeout(testUrl);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('page-404')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '视频无法播放' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// YouTube Premium 检测
-async function checkYouTubePremium() {
-  try {
-    const res = await fetchWithTimeout(BASE_URL_YOUTUBE_PREMIUM);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('Premium is not available')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '地区限制' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// Disney+ 检测
-async function checkDisney() {
-  try {
-    const res = await fetchWithTimeout(BASE_URL_DISNEY);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('Sorry, Disney+ is not available in your region')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '地区限制' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// Paramount+ 检测
-async function checkParamount() {
-  try {
-    const res = await fetchWithTimeout(BASE_URL_PARAMOUNT);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('Paramount+ is not available')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '地区限制' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// Discovery+ 检测
-async function checkDiscovery() {
-  try {
-    const res = await fetchWithTimeout(BASE_URL_DISCOVERY);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('Discovery+ is not available')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '地区限制' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// ChatGPT 检测
-async function checkChatGPT() {
-  try {
-    const res = await fetchWithTimeout(BASE_URL_CHATGPT);
-    if (!res.ok) return { status: STATUS_NOT_AVAILABLE, detail: `HTTP ${res.status}` };
-    const text = await res.text();
-    if (text.includes('ChatGPT is not available')) {
-      return { status: STATUS_NOT_AVAILABLE, detail: '访问受限' };
-    }
-    return { status: STATUS_AVAILABLE, detail: '可访问' };
-  } catch (e) {
-    if (e.name === 'AbortError') return { status: STATUS_TIMEOUT, detail: '请求超时' };
-    return { status: STATUS_ERROR, detail: e.message };
-  }
-}
-
-// === 新增：HBO Max 检测函数 ===
 async function checkHbomax() {
   try {
     const res = await fetchWithTimeout(BASE_URL_HBOMAX);
@@ -153,46 +94,11 @@ async function checkHbomax() {
   }
 }
 
-// === 5. 主检测函数，全部并发执行 ===
 async function main() {
-  const [
-    netflixRes,
-    youtubeRes,
-    disneyRes,
-    daznRes,
-    paramountRes,
-    discoveryRes,
-    chatgptRes,
-    hbomaxRes,
-  ] = await Promise.all([
-    checkNetflix(),
-    checkYouTubePremium(),
-    checkDisney(),
-    checkDAZN(),        // 这里假设你有DAZN检测函数
-    checkParamount(),
-    checkDiscovery(),
-    checkChatGPT(),
-    checkHbomax(),      // 新增 HBO Max 检测
-  ]);
+  const hbomaxRes = await checkHbomax();
+  result["HBO Max"] = `${hbomaxRes.status === STATUS_AVAILABLE ? 'HBO Max: 支持' : 'HBO Max: 不支持'} ${arrow} ${hbomaxRes.detail}`;
 
-  // 组装结果
-  const results = {
-    Netflix: `${netflixRes.status} ${netflixRes.detail ? '➟ ' + netflixRes.detail : ''}`,
-    YouTube_Premium: `${youtubeRes.status} ${youtubeRes.detail ? '➟ ' + youtubeRes.detail : ''}`,
-    Disney_Plus: `${disneyRes.status} ${disneyRes.detail ? '➟ ' + disneyRes.detail : ''}`,
-    DAZN: `${daznRes.status} ${daznRes.detail ? '➟ ' + daznRes.detail : ''}`,
-    Paramount_Plus: `${paramountRes.status} ${paramountRes.detail ? '➟ ' + paramountRes.detail : ''}`,
-    Discovery_Plus: `${discoveryRes.status} ${discoveryRes.detail ? '➟ ' + discoveryRes.detail : ''}`,
-    ChatGPT: `${chatgptRes.status} ${chatgptRes.detail ? '➟ ' + chatgptRes.detail : ''}`,
-    HBO_Max: `${hbomaxRes.status} ${hbomaxRes.detail ? '➟ ' + hbomaxRes.detail : ''}`,
-  };
-
-  // 输出（你也可以用QuantumultX通知API或者写文件，按你脚本原来写法）
-  console.log('流媒体服务检测结果:', results);
-
-  // 例如 return 结果，方便后续调用
-  return results;
+  console.log(result["HBO Max"]);
 }
 
-// === 6. 执行主检测 ===
 main();
