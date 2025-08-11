@@ -1,0 +1,25 @@
+/*
+HBO Max 解锁检测 (Quantumult X)
+作者: ChatGPT
+用法: [task_local] 或 [script]
+*/
+
+const test_url = "https://play.max.com/page/urn:hbo:feature:GYdcpbQ5gy8PCwwEAAAEK"; // 随机影片页面
+
+$task.fetch({ url: test_url, method: "GET", headers: { "User-Agent": "Mozilla/5.0" } }).then(response => {
+    if (response.statusCode === 200) {
+        if (response.body.includes("Not in service area") || response.body.includes("geo_blocked") || response.body.includes("NotAvailableInYourRegion")) {
+            $notify("HBO Max 检测", "", "❌ 该节点无法观看 HBO Max（地区限制）");
+        } else {
+            $notify("HBO Max 检测", "", "✅ 该节点可观看 HBO Max");
+        }
+    } else if (response.statusCode === 403) {
+        $notify("HBO Max 检测", "", "❌ 该节点被 HBO Max 封锁");
+    } else {
+        $notify("HBO Max 检测", "", `⚠️ 无法检测，状态码 ${response.statusCode}`);
+    }
+    $done();
+}, reason => {
+    $notify("HBO Max 检测", "", "⚠️ 请求失败，可能是节点无效");
+    $done();
+});
