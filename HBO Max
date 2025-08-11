@@ -1,25 +1,72 @@
-/*
-HBO Max 解锁检测 (Quantumult X)
-作者: ChatGPT
-用法: [task_local] 或 [script]
-*/
+// --- 1. 基础URL定义 ---
+const BASE_URL_HBOMAX = 'https://play.hbomax.com/';
 
-const test_url = "https://play.max.com/page/urn:hbo:feature:GYdcpbQ5gy8PCwwEAAAEK"; // 随机影片页面
+// --- 2. 状态定义（你原脚本里应该有类似结构，这里是新增） ---
+const STATUS_AVAILABLE = '支持';
+const STATUS_NOT_AVAILABLE = '不支持';
+const STATUS_TIMEOUT = '超时';
+const STATUS_ERROR = '异常';
 
-$task.fetch({ url: test_url, method: "GET", headers: { "User-Agent": "Mozilla/5.0" } }).then(response => {
-    if (response.statusCode === 200) {
-        if (response.body.includes("Not in service area") || response.body.includes("geo_blocked") || response.body.includes("NotAvailableInYourRegion")) {
-            $notify("HBO Max 检测", "", "❌ 该节点无法观看 HBO Max（地区限制）");
-        } else {
-            $notify("HBO Max 检测", "", "✅ 该节点可观看 HBO Max");
-        }
-    } else if (response.statusCode === 403) {
-        $notify("HBO Max 检测", "", "❌ 该节点被 HBO Max 封锁");
-    } else {
-        $notify("HBO Max 检测", "", `⚠️ 无法检测，状态码 ${response.statusCode}`);
+// --- 3. 检测函数 ---
+async function checkHbomax() {
+  try {
+    const controller = new AbortController();
+    const timeout = 10000; // 10秒超时
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const res = await fetch(BASE_URL_HBOMAX, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      return { status: STATUS_NOT_AVAILABLE, detail: `HTTP状态 ${res.status}` };
     }
-    $done();
-}, reason => {
-    $notify("HBO Max 检测", "", "⚠️ 请求失败，可能是节点无效");
-    $done();
-});
+
+    const text = await res.text();
+
+    // 判断页面内容来判断是否可用
+    if (text.includes('Sign In') || text.includes('Watch HBO Max')) {
+      return { status: STATUS_AVAILABLE, detail: '访问正常' };
+    } else if (text.match(/not available|sorry|error/i)) {
+      return { status: STATUS_NOT_AVAILABLE, detail: '地区限制或无法访问' };
+    } else {
+      return { status: STATUS_AVAILABLE, detail: '访问正常（未知详情）' };
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      return { status: STATUS_TIMEOUT, detail: '请求超时' };
+    }
+    return { status: STATUS_ERROR, detail: e.message };
+  }
+}
+
+// --- 4. 在主检测流程中加入 ---
+// 假设你原脚本有个类似main检测函数，比如叫 checkAllStreaming()
+async function checkAllStreaming() {
+  // 这里是示范的其它检测函数调用
+  const results = await Promise.all([
+    checkNetflix(),  // 你原来的函数
+    checkDisney(),
+    checkYouTubePremium(),
+    checkParamount(),
+    checkDiscovery(),
+    checkChatGPT(),
+    checkHbomax(), // 新增HBO Max检测
+  ]);
+
+  // 这里根据返回顺序构造结果对象
+  const output = {
+    Netflix: `${results[0].status} ${results[0].detail ? '➟ ' + results[0].detail : ''}`,
+    Disney: `${results[1].status} ${results[1].detail ? '➟ ' + results[1].detail : ''}`,
+    YouTube: `${results[2].status} ${results[2].detail ? '➟ ' + results[2].detail : ''}`,
+    Paramount: `${results[3].status} ${results[3].detail ? '➟ ' + results[3].detail : ''}`,
+    Discovery: `${results[4].status} ${results[4].detail ? '➟ ' + results[4].detail : ''}`,
+    ChatGPT: `${results[5].status} ${results[5].detail ? '➟ ' + results[5].detail : ''}`,
+    HBO_Max: `${results[6].status} ${results[6].detail ? '➟ ' + results[6].detail : ''}`, // 新增输出
+  };
+
+  console.log(output);
+  // 你原脚本可能会 return 或写入通知、UI等，这里根据原逻辑自行处理
+}
+
+// --- 5. 运行主检测 ---
+checkAllStreaming();
